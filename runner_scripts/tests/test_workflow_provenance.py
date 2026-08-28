@@ -195,7 +195,7 @@ def test_smoke_installers_are_hash_and_size_bound_to_signed_release_evidence():
     assert "--evidence signed\\metadata\\release-evidence.json" in arm
 
 
-def test_provenance_validator_rejects_missing_duplicate_and_wrong_sha(tmp_path):
+def test_provenance_validator_rejects_missing_conflicting_duplicate_and_wrong_sha(tmp_path):
     requested = "a" * 40
     rows = [
         f"{instance}|{workflow_provenance.REQUIRED_COMPONENTS[instance]}|{requested}"
@@ -214,7 +214,12 @@ def test_provenance_validator_rejects_missing_duplicate_and_wrong_sha(tmp_path):
     workflow_provenance.create(broken, requested, rows)
     duplicate = tmp_path / "duplicate.json"
     duplicate.write_text(broken.read_text(encoding="utf-8"), encoding="utf-8")
-    with pytest.raises(ValueError, match="duplicate provenance"):
+    assert len(workflow_provenance.validate(tmp_path, requested)) == 16
+
+    duplicate_records = json.loads(duplicate.read_text(encoding="utf-8"))
+    duplicate_records[0]["component_path"] = ".github/actions/unrelated/action.yml"
+    duplicate.write_text(json.dumps(duplicate_records), encoding="utf-8")
+    with pytest.raises(ValueError, match="component path mismatch|conflicting duplicate provenance"):
         workflow_provenance.validate(tmp_path, requested)
 
     duplicate.unlink()

@@ -228,9 +228,6 @@ def validate(directory: Path, requested_ref: str, summary: Path | None = None) -
         instance = record.get("instance")
         if not isinstance(instance, str) or not instance:
             raise ValueError("provenance row has no instance")
-        if instance in instances:
-            raise ValueError(f"duplicate provenance instance: {instance}")
-        instances[instance] = record
         if record.get("status") != "PASS":
             raise ValueError(f"non-PASS provenance instance: {instance}")
         if record.get("requested_ref") != requested_ref:
@@ -242,6 +239,11 @@ def validate(directory: Path, requested_ref: str, summary: Path | None = None) -
             raise ValueError(f"invalid resolved SHA: {instance}")
         if SHA_PATTERN.fullmatch(requested_ref) and resolved.lower() != requested_ref.lower():
             raise ValueError(f"resolved SHA mismatch: {instance}")
+        if instance in instances:
+            if instances[instance] != record:
+                raise ValueError(f"conflicting duplicate provenance instance: {instance}")
+            continue
+        instances[instance] = record
 
     missing = REQUIRED_INSTANCES - instances.keys()
     unexpected = instances.keys() - REQUIRED_INSTANCES
