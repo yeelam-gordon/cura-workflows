@@ -219,9 +219,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          requested='${{ inputs.cura_workflows_ref }}'
+          if [[ ! "$requested" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::allow_non_default_branch_package_create requires cura_workflows_ref to be an exact 40-hex SHA"
+            exit 1
+          fi
           python _cura_workflows_action/runner_scripts/workflow_provenance.py validate-callers \
             --repository _package_sources --validation-sha '${{ github.sha }}' \
-            --workflow-sha '${{ inputs.cura_workflows_ref }}' \
+            --workflow-sha "$requested" \
             --output package-chain/source-chain.json
 
       - name: Install TypeScript 5.6.2

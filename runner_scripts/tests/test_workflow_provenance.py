@@ -63,6 +63,7 @@ def test_package_ref_is_declared_and_forwarded_at_every_boundary():
     assert "validate-callers" in package
     assert "create-package-chain" in package
     assert "validated-package-provenance-" in package
+    assert "allow_non_default_branch_package_create requires cura_workflows_ref to be an exact 40-hex SHA" in package
 
 
 def test_nested_workflows_use_only_local_pinned_actions():
@@ -166,6 +167,7 @@ def test_installer_binds_validated_package_chain_and_actual_workflow_invocation(
         "job.workflow_ref",
         "job.workflow_sha",
         "metadata\\package-provenance.json",
+        "package_workflow_run_id requires cura_workflows_ref to be an exact 40-hex SHA",
     ):
         assert token in arm
     assert "C=$implementationSha" not in arm

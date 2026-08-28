@@ -159,6 +159,9 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path metadata | Out-Null
           if ('${{ inputs.package_workflow_run_id }}') {
+            if ($requested -notmatch '^[0-9a-fA-F]{40}$') {
+              throw 'package_workflow_run_id requires cura_workflows_ref to be an exact 40-hex SHA'
+            }
             python _cura_workflows_action\runner_scripts\workflow_provenance.py validate-callers `
               --repository _cura_sources --validation-sha '${{ github.sha }}' `
               --workflow-sha $requested --output metadata\source-chain.json
