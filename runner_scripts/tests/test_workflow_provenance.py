@@ -345,14 +345,14 @@ def test_provenance_validator_rejects_unrelated_component_path(tmp_path):
 def test_workflow_invocation_requires_literal_matching_target():
     requested = "a" * 40
     workflow_provenance.verify_workflow_invocation(
-        f"Ultimaker/Cura-workflows/.github/workflows/conan-package.yml@{requested}",
+        f"yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{requested}",
         requested,
         requested,
         ".github/workflows/conan-package.yml",
     )
     with pytest.raises(ValueError, match="exact 40-hex"):
         workflow_provenance.verify_workflow_invocation(
-            "Ultimaker/Cura-workflows/.github/workflows/conan-package.yml@refs/heads/main",
+            "yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@refs/heads/main",
             requested,
             "main",
             ".github/workflows/conan-package.yml",
@@ -366,7 +366,7 @@ def _git(repository, *arguments):
 def _validation_callers(workflow_sha):
     package = f"""jobs:
   package:
-    uses: ultimaker/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
+    uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
     with:
       cura_workflows_ref: {workflow_sha}
       allow_non_default_branch_package_create: true
@@ -378,7 +378,7 @@ def _validation_callers(workflow_sha):
 """
     installer = f"""jobs:
   installer:
-    uses: ultimaker/cura-workflows/.github/workflows/cura-installer-windows-arm.yml@{workflow_sha}
+    uses: yeelam-gordon/cura-workflows/.github/workflows/cura-installer-windows-arm.yml@{workflow_sha}
     with:
       cura_workflows_ref: {workflow_sha}
       cura_conan_version: ${{{{ inputs.cura_conan_version }}}}

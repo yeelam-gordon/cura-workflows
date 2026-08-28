@@ -85,7 +85,7 @@ jobs:
       - name: Checkout pinned workflow tools
         uses: actions/checkout@v6
         with:
-          repository: Ultimaker/Cura-workflows
+          repository: yeelam-gordon/cura-workflows
           ref: ${{ inputs.cura_workflows_ref }}
           path: _cura_workflows_action
 
@@ -393,7 +393,7 @@ jobs:
       - name: Checkout pinned workflow tools
         uses: actions/checkout@v6
         with:
-          repository: Ultimaker/Cura-workflows
+          repository: yeelam-gordon/cura-workflows
           ref: ${{ inputs.cura_workflows_ref }}
           path: _cura_workflows_action
 
@@ -699,7 +699,7 @@ jobs:
       - name: Checkout pinned workflow tools
         uses: actions/checkout@v6
         with:
-          repository: Ultimaker/Cura-workflows
+          repository: yeelam-gordon/cura-workflows
           ref: ${{ inputs.cura_workflows_ref }}
           path: _cura_workflows_action
 
