@@ -120,7 +120,18 @@ def enumerate_includes(root: Path, includes: list[str]) -> list[tuple[str, Path]
         target = root.joinpath(*PurePosixPath(normalized).parts)
         if not target.exists():
             raise ContractError(f"included path is missing: {normalized}")
-        candidates = [target] if target.is_file() else [p for p in target.rglob("*") if p.is_file()]
+        if target.is_symlink():
+            raise ContractError(f"included path is a symlink: {normalized}")
+        if target.is_file():
+            candidates = [target]
+        else:
+            candidates = []
+            for path in target.rglob("*"):
+                relative = safe_relative_path(path.relative_to(root).as_posix())
+                if path.is_symlink():
+                    raise ContractError(f"included path is a symlink: {relative}")
+                if path.is_file():
+                    candidates.append(path)
         for candidate in candidates:
             relative = safe_relative_path(candidate.relative_to(root).as_posix())
             folded = relative.casefold()

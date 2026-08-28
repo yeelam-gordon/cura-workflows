@@ -129,6 +129,19 @@ def test_traversal_and_duplicate_contract_paths_fail(tmp_path):
         contract.verify_contract(tmp_path, output)
 
 
+def test_symlinked_include_is_rejected(tmp_path, monkeypatch):
+    metadata_path, output = make_root(tmp_path)
+    target = tmp_path / "payload" / "app.exe"
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path == target or original_is_symlink(path),
+    )
+    with pytest.raises(contract.ContractError, match="included path is a symlink"):
+        contract.create_contract(tmp_path, metadata_path, output, ["payload"])
+
+
 def test_malformed_required_metadata_fails(tmp_path):
     metadata_path, output = make_root(tmp_path)
     broken = metadata()
