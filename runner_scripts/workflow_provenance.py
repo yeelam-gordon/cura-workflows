@@ -43,7 +43,7 @@ def verify_workflow_invocation(
     workflow_sha: str,
     requested_ref: str,
     component_path: str,
-    repository: str = "Ultimaker/Cura-workflows",
+    repository: str = "yeelam-gordon/cura-workflows",
 ) -> None:
     requested = _require_sha(requested_ref, "requested ref")
     resolved = _require_sha(workflow_sha, "workflow SHA")
@@ -97,7 +97,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     escaped = re.escape(workflow_sha)
     _require_line(
         package,
-        rf"uses:\s*ultimaker/cura-workflows/\.github/workflows/conan-package\.yml@{escaped}\s*$",
+        rf"uses:\s*yeelam-gordon/cura-workflows/\.github/workflows/conan-package\.yml@{escaped}\s*$",
         "the package workflow target to W",
     )
     _require_line(package, rf"cura_workflows_ref:\s*{escaped}\s*$", "package W input")
@@ -113,7 +113,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
 
     _require_line(
         installer,
-        rf"uses:\s*ultimaker/cura-workflows/\.github/workflows/cura-installer-windows-arm\.yml@{escaped}\s*$",
+        rf"uses:\s*yeelam-gordon/cura-workflows/\.github/workflows/cura-installer-windows-arm\.yml@{escaped}\s*$",
         "the installer workflow target to W",
     )
     _require_line(installer, rf"cura_workflows_ref:\s*{escaped}\s*$", "installer W input")
@@ -281,7 +281,7 @@ def main(argv=None) -> int:
     invocation_parser.add_argument("--workflow-sha", required=True)
     invocation_parser.add_argument("--requested-ref", required=True)
     invocation_parser.add_argument("--component-path", required=True)
-    invocation_parser.add_argument("--repository", default="Ultimaker/Cura-workflows")
+    invocation_parser.add_argument("--repository", default="yeelam-gordon/cura-workflows")
     callers_parser = subparsers.add_parser("validate-callers")
     callers_parser.add_argument("--repository", required=True, type=Path)
     callers_parser.add_argument("--validation-sha", required=True)
