@@ -98,7 +98,7 @@ runs:
     - name: Checkout Cura-workflows repo
       uses: actions/checkout@v6
       with:
-        repository: Ultimaker/Cura-workflows
+        repository: yeelam-gordon/cura-workflows
         path: Cura-workflows
         ref: ${{ inputs.cura_workflows_branch }}
 
