@@ -145,6 +145,14 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     if uranium_match is None:
         raise ValueError("missing required exact validation_uranium_ref")
     uranium = _require_sha(uranium_match.group(1), "Uranium SHA")
+    iocpsupport_match = re.search(
+        r"validation_iocpsupport_ref:\s*([0-9a-fA-F]{40})\s*$",
+        package,
+        re.MULTILINE,
+    )
+    if iocpsupport_match is None:
+        raise ValueError("missing required exact validation_iocpsupport_ref")
+    iocpsupport = _require_sha(iocpsupport_match.group(1), "IOCP support SHA")
 
     _require_line(
         installer,
@@ -164,6 +172,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         "conan_config": conan_config,
         "conan_cache_key": conan_cache_key,
         "uranium": uranium,
+        "iocpsupport": iocpsupport,
     }
 
 

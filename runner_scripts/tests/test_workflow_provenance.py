@@ -291,6 +291,42 @@ def test_validation_uranium_override_is_exact_and_fail_closed():
     )
 
 
+def test_validation_iocpsupport_override_builds_and_tests_exact_arm64_wheel():
+    package = yaml.safe_load(read("conan-package.yml"))
+    inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    assert inputs["validation_iocpsupport_ref"]["default"] == ""
+
+    steps = package["jobs"]["conan-package-create"]["steps"]
+    checkout = next(
+        step for step in steps
+        if step["name"] == "Checkout validation IOCP support package"
+    )
+    build = next(
+        step for step in steps
+        if step["name"] == "Build validation IOCP support ARM64 wheel"
+    )
+    condition = (
+        "${{ matrix.runner == 'windows-11-arm' && "
+        "inputs.validation_iocpsupport_ref != '' }}"
+    )
+    assert checkout["if"] == build["if"] == condition
+    assert checkout["with"]["repository"] == "yeelam-gordon/twisted-iocpsupport"
+    assert checkout["with"]["ref"] == "${{ inputs.validation_iocpsupport_ref }}"
+    assert "restricted to credential-free validation mode" in build["run"]
+    assert "must be an exact 40-hex SHA" in build["run"]
+    assert build["env"]["CIBW_BUILD"] == "cp312-win_arm64"
+    assert build["env"]["CIBW_ARCHS_WINDOWS"] == "ARM64"
+    assert "cibuildwheel==3.2.1" in build["run"]
+    assert "twisted_iocpsupport-1.0.4-cp312-cp312-win_arm64.whl" in build["run"]
+    assert 'assert "Version: 1.0.4\\n" in metadata' in build["run"]
+    assert 'requirement["url"] = wheel.as_uri()' in build["run"]
+    assert steps.index(build) < next(
+        index
+        for index, step in enumerate(steps)
+        if step["name"] == "Create the Package (binaries)"
+    )
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
@@ -562,6 +598,7 @@ def _validation_callers(workflow_sha):
     conan_config_sha = "e" * 40
     conan_cache_key = "cura-arm64-deps-v1-c-w-mpdecimal-config"
     uranium_sha = "f" * 40
+    iocpsupport_sha = "1" * 40
     package = f"""jobs:
   package:
     uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
@@ -573,6 +610,7 @@ def _validation_callers(workflow_sha):
       validation_conan_config_ref: {conan_config_sha}
       validation_conan_cache_key: {conan_cache_key}
       validation_uranium_ref: {uranium_sha}
+      validation_iocpsupport_ref: {iocpsupport_sha}
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
@@ -624,6 +662,7 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     assert chain["conan_config"] == "e" * 40
     assert chain["conan_cache_key"] == "cura-arm64-deps-v1-c-w-mpdecimal-config"
     assert chain["uranium"] == "f" * 40
+    assert chain["iocpsupport"] == "1" * 40
 
     _git(repository, "reset", "--hard", "HEAD^")
     (workflows / "conan-package.yml").write_text(
@@ -713,6 +752,25 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     with pytest.raises(ValueError, match="validation_uranium_ref"):
         workflow_provenance.validate_callers(
             repository, uranium_unpinned_sha, workflow_sha
+        )
+
+    _git(repository, "reset", "--hard", "HEAD^")
+    (workflows / "conan-package.yml").write_text(
+        package.replace(f"      validation_iocpsupport_ref: {'1' * 40}\n", ""),
+        encoding="utf-8",
+    )
+    (workflows / "windows-arm.yml").write_text(installer, encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "IOCP support override not pinned")
+    iocpsupport_unpinned_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="validation_iocpsupport_ref"):
+        workflow_provenance.validate_callers(
+            repository, iocpsupport_unpinned_sha, workflow_sha
         )
 
 

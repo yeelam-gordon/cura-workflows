@@ -72,6 +72,11 @@ on:
         required: false
         default: ''
         type: string
+      validation_iocpsupport_ref:
+        description: Exact twisted-iocpsupport 1.0.x fork commit used to build the Windows ARM64 wheel
+        required: false
+        default: ''
+        type: string
     outputs:
       package_version_full:
         value: ${{ jobs.conan-recipe-version.outputs.package_version_full }}
@@ -368,6 +373,69 @@ jobs:
           [[ "${resolved,,}" == "${requested,,}" ]]
           echo "validation_uranium_ref=$resolved" >> "$GITHUB_STEP_SUMMARY"
           conan export _uranium_override --version 5.14.0-alpha.0 --user ultimaker --channel testing
+
+      - name: Checkout validation IOCP support package
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_iocpsupport_ref != '' }}
+        uses: actions/checkout@v6
+        with:
+          repository: yeelam-gordon/twisted-iocpsupport
+          ref: ${{ inputs.validation_iocpsupport_ref }}
+          path: _iocpsupport_override
+
+      - name: Build validation IOCP support ARM64 wheel
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_iocpsupport_ref != '' }}
+        shell: bash
+        env:
+          CIBW_BUILD: cp312-win_arm64
+          CIBW_ARCHS_WINDOWS: ARM64
+        run: |
+          set -euo pipefail
+          requested='${{ inputs.validation_iocpsupport_ref }}'
+          if [[ '${{ inputs.allow_non_default_branch_package_create }}' != 'true' || '${{ inputs.validation_skip_recipe_upload }}' != 'true' ]]; then
+            echo "::error::The IOCP support override is restricted to credential-free validation mode"
+            exit 1
+          fi
+          if [[ ! "$requested" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::validation_iocpsupport_ref must be an exact 40-hex SHA"
+            exit 1
+          fi
+          resolved=$(git -C _iocpsupport_override rev-parse HEAD)
+          [[ "${resolved,,}" == "${requested,,}" ]]
+          python -m pip install cibuildwheel==3.2.1
+          python -m cibuildwheel _iocpsupport_override --output-dir _iocpsupport_wheel
+          wheel=$(find _iocpsupport_wheel -maxdepth 1 -type f -name 'twisted_iocpsupport-1.0.4-cp312-cp312-win_arm64.whl' -print -quit)
+          [[ -n "$wheel" ]]
+          python - "$wheel" "_package_sources/${{ inputs.conan_recipe_root }}/conandata.yml" <<'PY'
+          import hashlib
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          import yaml
+
+          wheel = Path(sys.argv[1]).resolve()
+          recipe = Path(sys.argv[2])
+          with zipfile.ZipFile(wheel) as archive:
+              metadata_name = next(
+                  name for name in archive.namelist()
+                  if name.endswith(".dist-info/METADATA")
+              )
+              metadata = archive.read(metadata_name).decode("utf-8")
+          assert "Name: twisted-iocpsupport\n" in metadata
+          assert "Version: 1.0.4\n" in metadata
+          data = yaml.safe_load(recipe.read_text(encoding="utf-8"))
+          requirement = data["pip_requirements_core"]["Windows"]["twisted-iocpsupport"]
+          requirement.clear()
+          requirement["url"] = wheel.as_uri()
+          recipe.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+          print(f"validation_iocpsupport_wheel={wheel.name}")
+          print(f"validation_iocpsupport_sha256={digest}")
+          PY
+          {
+            echo "validation_iocpsupport_ref=$resolved"
+            sha256sum "$wheel"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preflight Windows ARM64 libffi
         if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_conan_config_ref != '' }}
