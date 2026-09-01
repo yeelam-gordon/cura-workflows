@@ -134,6 +134,40 @@ def test_credential_free_validation_skips_only_write_recipe_uploads():
     assert 'conan create "_package_sources/${{ inputs.conan_recipe_root }}"' in create_command
 
 
+def test_validation_mpdecimal_override_is_pinned_and_fail_closed():
+    package = yaml.safe_load(read("conan-package.yml"))
+    inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    assert inputs["validation_mpdecimal_recipe_ref"]["default"] == ""
+
+    steps = package["jobs"]["conan-package-create"]["steps"]
+    checkout = next(
+        step for step in steps if step["name"] == "Checkout validation mpdecimal recipe"
+    )
+    export = next(
+        step
+        for step in steps
+        if step["name"] == "Export validation mpdecimal recipe override"
+    )
+    condition = (
+        "${{ matrix.runner == 'windows-11-arm' && "
+        "inputs.validation_mpdecimal_recipe_ref != '' }}"
+    )
+    assert checkout["if"] == condition
+    assert checkout["with"]["repository"] == "yeelam-gordon/conan-center-index"
+    assert checkout["with"]["ref"] == "${{ inputs.validation_mpdecimal_recipe_ref }}"
+    assert checkout["with"]["sparse-checkout"] == "recipes/mpdecimal"
+    assert export["if"] == condition
+    assert "restricted to credential-free validation mode" in export["run"]
+    assert "must be an exact 40-hex SHA" in export["run"]
+    assert "rev-parse HEAD" in export["run"]
+    assert "conan export _mpdecimal_recipe/recipes/mpdecimal/all --version 2.5.1" in export["run"]
+    assert steps.index(export) < next(
+        index
+        for index, step in enumerate(steps)
+        if step["name"] == "Create the Package (binaries)"
+    )
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
@@ -398,6 +432,7 @@ def _git(repository, *arguments):
 
 
 def _validation_callers(workflow_sha):
+    mpdecimal_recipe_sha = "d" * 40
     package = f"""jobs:
   package:
     uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
@@ -405,6 +440,7 @@ def _validation_callers(workflow_sha):
       cura_workflows_ref: {workflow_sha}
       allow_non_default_branch_package_create: true
       validation_skip_recipe_upload: true
+      validation_mpdecimal_recipe_ref: {mpdecimal_recipe_sha}
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
@@ -452,6 +488,7 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     chain = workflow_provenance.validate_callers(repository, validation_sha, workflow_sha)
     assert chain["V"] == validation_sha
     assert chain["W"] == workflow_sha
+    assert chain["mpdecimal_recipe"] == "d" * 40
 
     _git(repository, "reset", "--hard", "HEAD^")
     (workflows / "conan-package.yml").write_text(
