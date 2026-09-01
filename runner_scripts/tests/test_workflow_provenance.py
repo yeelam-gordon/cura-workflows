@@ -462,6 +462,23 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     with pytest.raises(ValueError, match="package workflow target"):
         workflow_provenance.validate_callers(repository, mutable_sha, workflow_sha)
 
+    _git(repository, "reset", "--hard", "HEAD^")
+    (workflows / "conan-package.yml").write_text(
+        package.replace("      validation_skip_recipe_upload: true\n", ""),
+        encoding="utf-8",
+    )
+    (workflows / "windows-arm.yml").write_text(installer, encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "upload skip not opted in")
+    unopted_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="validation_skip_recipe_upload=true"):
+        workflow_provenance.validate_callers(repository, unopted_sha, workflow_sha)
+
 
 def test_package_chain_binds_reference_run_and_c_v_w(tmp_path):
     source = tmp_path / "source.json"
