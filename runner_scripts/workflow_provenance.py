@@ -111,6 +111,16 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         ("platform_wasm", "false"),
     ):
         _require_line(package, rf"{name}:\s*{value}\s*$", f"package {name}={value}")
+    dependency_match = re.search(
+        r"validation_mpdecimal_recipe_ref:\s*([0-9a-fA-F]{40})\s*$",
+        package,
+        re.MULTILINE,
+    )
+    if dependency_match is None:
+        raise ValueError("missing required exact validation_mpdecimal_recipe_ref")
+    mpdecimal_recipe = _require_sha(
+        dependency_match.group(1), "mpdecimal recipe SHA"
+    )
 
     _require_line(
         installer,
@@ -126,6 +136,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         "C": implementation,
         "V": validation,
         "W": workflow,
+        "mpdecimal_recipe": mpdecimal_recipe,
     }
 
 

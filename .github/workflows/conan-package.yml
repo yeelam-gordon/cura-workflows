@@ -52,6 +52,11 @@ on:
         required: false
         default: false
         type: boolean
+      validation_mpdecimal_recipe_ref:
+        description: Exact ConanCenter fork commit containing the Windows ARM64 mpdecimal recipe fix
+        required: false
+        default: ''
+        type: string
     outputs:
       package_version_full:
         value: ${{ jobs.conan-recipe-version.outputs.package_version_full }}
@@ -241,6 +246,34 @@ jobs:
       - name: Install TypeScript 5.6.2
         if: ${{ inputs.platform_wasm == true }}
         run: npm install -g typescript@5.6.2
+
+      - name: Checkout validation mpdecimal recipe
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_mpdecimal_recipe_ref != '' }}
+        uses: actions/checkout@v6
+        with:
+          repository: yeelam-gordon/conan-center-index
+          ref: ${{ inputs.validation_mpdecimal_recipe_ref }}
+          path: _mpdecimal_recipe
+          sparse-checkout: recipes/mpdecimal
+
+      - name: Export validation mpdecimal recipe override
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_mpdecimal_recipe_ref != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested='${{ inputs.validation_mpdecimal_recipe_ref }}'
+          if [[ '${{ inputs.allow_non_default_branch_package_create }}' != 'true' || '${{ inputs.validation_skip_recipe_upload }}' != 'true' ]]; then
+            echo "::error::The mpdecimal override is restricted to credential-free validation mode"
+            exit 1
+          fi
+          if [[ ! "$requested" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::validation_mpdecimal_recipe_ref must be an exact 40-hex SHA"
+            exit 1
+          fi
+          resolved=$(git -C _mpdecimal_recipe rev-parse HEAD)
+          [[ "${resolved,,}" == "${requested,,}" ]]
+          echo "validation_mpdecimal_recipe_ref=$resolved" >> "$GITHUB_STEP_SUMMARY"
+          conan export _mpdecimal_recipe/recipes/mpdecimal/all --version 2.5.1
 
       - name: Create the Package (binaries)
         env:
