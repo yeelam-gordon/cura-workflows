@@ -41,6 +41,11 @@ on:
       provenance_instance:
         required: true
         type: string
+      validation_skip_recipe_upload:
+        description: Skip write-only recipe upload after local export
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -137,10 +142,16 @@ jobs:
             --row "${{ inputs.provenance_instance }}/upload-action|.github/actions/upload-conan-package/action.yml|$resolved"
 
       - name: Upload the Recipe
+        if: ${{ inputs.validation_skip_recipe_upload == false }}
         uses: ./_cura_workflows_action/.github/actions/upload-conan-package
         with:
           package_name: ${{ steps.export-local-cache.outputs.package_reference }}
           private_data: ${{ inputs.private_data }}
+
+      - name: Record validation-only upload skip
+        if: ${{ inputs.validation_skip_recipe_upload }}
+        shell: bash
+        run: echo "Recipe upload intentionally skipped by validation_skip_recipe_upload; package creation will use the checked-out recipe." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload recipe-export provenance
         uses: actions/upload-artifact@v7
