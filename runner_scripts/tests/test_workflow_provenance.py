@@ -367,6 +367,7 @@ def _validation_callers(workflow_sha):
     with:
       cura_workflows_ref: {workflow_sha}
       allow_non_default_branch_package_create: true
+      validation_skip_recipe_upload: true
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
