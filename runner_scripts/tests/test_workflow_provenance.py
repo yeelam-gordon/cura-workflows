@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from runner_scripts import workflow_provenance
 
@@ -79,6 +80,21 @@ def test_nested_workflows_use_only_local_pinned_actions():
     combined = read("conan-package.yml") + version + export
     assert "ultimaker/cura-workflows/.github/actions/setup-build-environment@main" not in combined.lower()
     assert "ultimaker/cura-workflows/.github/actions/upload-conan-package@main" not in combined.lower()
+
+
+def test_broadcast_data_runs_from_checked_out_recipe_root_with_pinned_helper():
+    workflow = yaml.safe_load(read("conan-recipe-version.yml"))
+    step = next(
+        step
+        for step in workflow["jobs"]["make-versions"]["steps"]
+        if step.get("id") == "get-conan-broadcast-data"
+    )
+    assert step["working-directory"] == "_package_sources/${{ inputs.conan_recipe_root }}"
+    assert 'conan inspect "."' in step["run"]
+    assert (
+        'python "$GITHUB_WORKSPACE/Cura-workflows/runner_scripts/'
+        'get_conan_broadcast_data.py"'
+    ) in step["run"]
 
 
 def test_runner_list_checkout_is_pinned_and_asserted():

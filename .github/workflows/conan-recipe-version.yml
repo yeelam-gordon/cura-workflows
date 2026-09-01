@@ -134,6 +134,7 @@ jobs:
       - id: get-conan-broadcast-data
         name: Get Conan broadcast data
         shell: bash
+        working-directory: _package_sources/${{ inputs.conan_recipe_root }}
         run: |
-          package_name=$(conan inspect "_package_sources/${{ inputs.conan_recipe_root }}" | awk '/^name:/ {print $2}')
-          python Cura-workflows/runner_scripts/get_conan_broadcast_data.py --package_name "$package_name" --sha "${{ github.sha }}" --event_name "${{ github.event_name }}" --ref_name "${{ inputs.branch != '' && inputs.branch || github.ref_name }}" --head_ref "${{ github.head_ref }}" ${{ inputs.release && '--release' || '' }} --version "${{ inputs.version }}" ${{ inputs.internal && '--internal' || '' }} --version-output "$GITHUB_OUTPUT" --summary-output "$GITHUB_STEP_SUMMARY"
+          package_name=$(conan inspect "." | awk '/^name:/ {print $2}')
+          python "$GITHUB_WORKSPACE/Cura-workflows/runner_scripts/get_conan_broadcast_data.py" --package_name "$package_name" --sha "${{ github.sha }}" --event_name "${{ github.event_name }}" --ref_name "${{ inputs.branch != '' && inputs.branch || github.ref_name }}" --head_ref "${{ github.head_ref }}" ${{ inputs.release && '--release' || '' }} --version "${{ inputs.version }}" ${{ inputs.internal && '--internal' || '' }} --version-output "$GITHUB_OUTPUT" --summary-output "$GITHUB_STEP_SUMMARY"
