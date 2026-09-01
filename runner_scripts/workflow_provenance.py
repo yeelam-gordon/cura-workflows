@@ -103,6 +103,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     _require_line(package, rf"cura_workflows_ref:\s*{escaped}\s*$", "package W input")
     for name, value in (
         ("allow_non_default_branch_package_create", "true"),
+        ("validation_skip_recipe_upload", "true"),
         ("platform_windows_arm64", "true"),
         ("platform_linux", "false"),
         ("platform_windows", "false"),
