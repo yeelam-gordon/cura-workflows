@@ -129,6 +129,14 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     if config_match is None:
         raise ValueError("missing required exact validation_conan_config_ref")
     conan_config = _require_sha(config_match.group(1), "Conan config SHA")
+    cache_match = re.search(
+        r"validation_conan_cache_key:\s*([A-Za-z0-9._-]{1,160})\s*$",
+        package,
+        re.MULTILINE,
+    )
+    if cache_match is None:
+        raise ValueError("missing required bounded validation_conan_cache_key")
+    conan_cache_key = cache_match.group(1)
 
     _require_line(
         installer,
@@ -146,6 +154,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         "W": workflow,
         "mpdecimal_recipe": mpdecimal_recipe,
         "conan_config": conan_config,
+        "conan_cache_key": conan_cache_key,
     }
 
 

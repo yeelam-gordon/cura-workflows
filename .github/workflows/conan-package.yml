@@ -62,6 +62,11 @@ on:
         required: false
         default: ''
         type: string
+      validation_conan_cache_key:
+        description: Bounded credential-free Conan package-cache namespace
+        required: false
+        default: ''
+        type: string
     outputs:
       package_version_full:
         value: ${{ jobs.conan-recipe-version.outputs.package_version_full }}
@@ -252,6 +257,31 @@ jobs:
         if: ${{ inputs.platform_wasm == true }}
         run: npm install -g typescript@5.6.2
 
+      - name: Validate Windows ARM64 Conan cache namespace
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_conan_cache_key != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested='${{ inputs.validation_conan_cache_key }}'
+          if [[ '${{ inputs.allow_non_default_branch_package_create }}' != 'true' || '${{ inputs.validation_skip_recipe_upload }}' != 'true' ]]; then
+            echo "::error::The Conan cache is restricted to credential-free validation mode"
+            exit 1
+          fi
+          if [[ ! "$requested" =~ ^[A-Za-z0-9._-]{1,160}$ ]]; then
+            echo "::error::validation_conan_cache_key must contain 1-160 safe characters"
+            exit 1
+          fi
+
+      - name: Restore Windows ARM64 Conan package cache
+        id: validation-conan-cache
+        if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_conan_cache_key != '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.conan2/p
+          key: ${{ inputs.validation_conan_cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ inputs.validation_conan_cache_key }}-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Checkout validation Conan configuration
         if: ${{ matrix.runner == 'windows-11-arm' && inputs.validation_conan_config_ref != '' }}
         uses: actions/checkout@v6
@@ -319,9 +349,29 @@ jobs:
             --output-folder _libffi_preflight ${{ matrix.conan_extra_args }}
 
       - name: Create the Package (binaries)
+        id: conan-create
+        continue-on-error: true
+        timeout-minutes: 300
         env:
           CURA_WINDOWS_ARM64_X64_BUILD_CONTEXT: ${{ matrix.runner == 'windows-11-arm' && '1' || '0' }}
         run: conan create "_package_sources/${{ inputs.conan_recipe_root }}" --version ${{ needs.conan-recipe-version.outputs.version_base }} --user ${{ needs.conan-recipe-version.outputs.user }} --channel ${{ needs.conan-recipe-version.outputs.channel }} ${{ inputs.conan_extra_args }} --build=missing ${{ matrix.conan_extra_args }}
+
+      - name: Remove regenerable Conan cache content
+        if: ${{ always() && matrix.runner == 'windows-11-arm' && inputs.validation_conan_cache_key != '' }}
+        shell: bash
+        run: conan cache clean "*" --source --build --download --temp
+
+      - name: Save Windows ARM64 Conan package cache
+        if: ${{ always() && matrix.runner == 'windows-11-arm' && inputs.validation_conan_cache_key != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.conan2/p
+          key: ${{ steps.validation-conan-cache.outputs.cache-primary-key }}
+
+      - name: Fail when Conan package creation failed
+        if: ${{ steps.conan-create.outcome == 'failure' }}
+        shell: bash
+        run: exit 1
 
       - name: Record produced Conan reference
         id: produced-reference

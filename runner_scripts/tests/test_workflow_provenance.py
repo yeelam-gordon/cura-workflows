@@ -205,6 +205,59 @@ def test_validation_conan_config_override_is_pinned_and_preflights_libffi():
     assert steps.index(install) < steps.index(preflight) < create_index
 
 
+def test_validation_conan_cache_is_bounded_package_only_and_failure_safe():
+    package = yaml.safe_load(read("conan-package.yml"))
+    inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    assert inputs["validation_conan_cache_key"]["default"] == ""
+
+    steps = package["jobs"]["conan-package-create"]["steps"]
+    validate = next(
+        step for step in steps if step["name"] == "Validate Windows ARM64 Conan cache namespace"
+    )
+    restore = next(
+        step for step in steps if step["name"] == "Restore Windows ARM64 Conan package cache"
+    )
+    create = next(
+        step for step in steps if step["name"] == "Create the Package (binaries)"
+    )
+    clean = next(
+        step for step in steps if step["name"] == "Remove regenerable Conan cache content"
+    )
+    save = next(
+        step for step in steps if step["name"] == "Save Windows ARM64 Conan package cache"
+    )
+    fail = next(
+        step for step in steps if step["name"] == "Fail when Conan package creation failed"
+    )
+    condition = (
+        "${{ matrix.runner == 'windows-11-arm' && "
+        "inputs.validation_conan_cache_key != '' }}"
+    )
+    assert validate["if"] == restore["if"] == condition
+    assert "restricted to credential-free validation mode" in validate["run"]
+    assert "^[A-Za-z0-9._-]{1,160}$" in validate["run"]
+    assert restore["uses"] == "actions/cache/restore@v4"
+    assert restore["with"]["path"] == "~/.conan2/p"
+    assert "~/.conan2/p" in save["with"]["path"]
+    assert "~/.conan2/" not in save["with"]["path"].replace("~/.conan2/p", "")
+    assert "runner.os" in restore["with"]["key"]
+    assert "runner.arch" in restore["with"]["key"]
+    assert "github.run_id" in restore["with"]["key"]
+    assert restore["with"]["restore-keys"].endswith("${{ runner.arch }}-\n")
+    assert create["continue-on-error"] is True
+    assert create["timeout-minutes"] == 300
+    assert clean["if"].startswith("${{ always()")
+    assert "--source --build --download --temp" in clean["run"]
+    assert save["if"].startswith("${{ always()")
+    assert save["uses"] == "actions/cache/save@v4"
+    assert save["with"]["key"] == (
+        "${{ steps.validation-conan-cache.outputs.cache-primary-key }}"
+    )
+    assert fail["if"] == "${{ steps.conan-create.outcome == 'failure' }}"
+    assert steps.index(restore) < steps.index(create) < steps.index(clean)
+    assert steps.index(clean) < steps.index(save) < steps.index(fail)
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
@@ -474,6 +527,7 @@ def _git(repository, *arguments):
 def _validation_callers(workflow_sha):
     mpdecimal_recipe_sha = "d" * 40
     conan_config_sha = "e" * 40
+    conan_cache_key = "cura-arm64-deps-v1-c-w-mpdecimal-config"
     package = f"""jobs:
   package:
     uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
@@ -483,6 +537,7 @@ def _validation_callers(workflow_sha):
       validation_skip_recipe_upload: true
       validation_mpdecimal_recipe_ref: {mpdecimal_recipe_sha}
       validation_conan_config_ref: {conan_config_sha}
+      validation_conan_cache_key: {conan_cache_key}
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
@@ -532,6 +587,7 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     assert chain["W"] == workflow_sha
     assert chain["mpdecimal_recipe"] == "d" * 40
     assert chain["conan_config"] == "e" * 40
+    assert chain["conan_cache_key"] == "cura-arm64-deps-v1-c-w-mpdecimal-config"
 
     _git(repository, "reset", "--hard", "HEAD^")
     (workflows / "conan-package.yml").write_text(
@@ -583,6 +639,26 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     ).stdout.strip()
     with pytest.raises(ValueError, match="validation_conan_config_ref"):
         workflow_provenance.validate_callers(repository, unpinned_sha, workflow_sha)
+
+    _git(repository, "reset", "--hard", "HEAD^")
+    (workflows / "conan-package.yml").write_text(
+        package.replace(
+            "      validation_conan_cache_key: cura-arm64-deps-v1-c-w-mpdecimal-config\n",
+            "",
+        ),
+        encoding="utf-8",
+    )
+    (workflows / "windows-arm.yml").write_text(installer, encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "Conan cache not bounded")
+    unbounded_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="validation_conan_cache_key"):
+        workflow_provenance.validate_callers(repository, unbounded_sha, workflow_sha)
 
 
 def test_package_chain_binds_reference_run_and_c_v_w(tmp_path):
