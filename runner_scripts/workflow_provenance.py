@@ -137,6 +137,14 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     if cache_match is None:
         raise ValueError("missing required bounded validation_conan_cache_key")
     conan_cache_key = cache_match.group(1)
+    uranium_match = re.search(
+        r"validation_uranium_ref:\s*([0-9a-fA-F]{40})\s*$",
+        package,
+        re.MULTILINE,
+    )
+    if uranium_match is None:
+        raise ValueError("missing required exact validation_uranium_ref")
+    uranium = _require_sha(uranium_match.group(1), "Uranium SHA")
 
     _require_line(
         installer,
@@ -155,6 +163,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         "mpdecimal_recipe": mpdecimal_recipe,
         "conan_config": conan_config,
         "conan_cache_key": conan_cache_key,
+        "uranium": uranium,
     }
 
 

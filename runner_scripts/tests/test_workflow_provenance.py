@@ -258,6 +258,39 @@ def test_validation_conan_cache_is_bounded_package_only_and_failure_safe():
     assert steps.index(clean) < steps.index(save) < steps.index(fail)
 
 
+def test_validation_uranium_override_is_exact_and_fail_closed():
+    package = yaml.safe_load(read("conan-package.yml"))
+    inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    assert inputs["validation_uranium_ref"]["default"] == ""
+
+    steps = package["jobs"]["conan-package-create"]["steps"]
+    checkout = next(
+        step for step in steps if step["name"] == "Checkout validation Uranium package"
+    )
+    export = next(
+        step for step in steps if step["name"] == "Export validation Uranium package override"
+    )
+    condition = (
+        "${{ matrix.runner == 'windows-11-arm' && "
+        "inputs.validation_uranium_ref != '' }}"
+    )
+    assert checkout["if"] == export["if"] == condition
+    assert checkout["with"]["repository"] == "yeelam-gordon/Uranium"
+    assert checkout["with"]["ref"] == "${{ inputs.validation_uranium_ref }}"
+    assert "restricted to credential-free validation mode" in export["run"]
+    assert "must be an exact 40-hex SHA" in export["run"]
+    assert "rev-parse HEAD" in export["run"]
+    assert (
+        "conan export _uranium_override --version 5.14.0-alpha.0 "
+        "--user ultimaker --channel testing"
+    ) in export["run"]
+    assert steps.index(export) < next(
+        index
+        for index, step in enumerate(steps)
+        if step["name"] == "Create the Package (binaries)"
+    )
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
@@ -528,6 +561,7 @@ def _validation_callers(workflow_sha):
     mpdecimal_recipe_sha = "d" * 40
     conan_config_sha = "e" * 40
     conan_cache_key = "cura-arm64-deps-v1-c-w-mpdecimal-config"
+    uranium_sha = "f" * 40
     package = f"""jobs:
   package:
     uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
@@ -538,6 +572,7 @@ def _validation_callers(workflow_sha):
       validation_mpdecimal_recipe_ref: {mpdecimal_recipe_sha}
       validation_conan_config_ref: {conan_config_sha}
       validation_conan_cache_key: {conan_cache_key}
+      validation_uranium_ref: {uranium_sha}
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
@@ -588,6 +623,7 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     assert chain["mpdecimal_recipe"] == "d" * 40
     assert chain["conan_config"] == "e" * 40
     assert chain["conan_cache_key"] == "cura-arm64-deps-v1-c-w-mpdecimal-config"
+    assert chain["uranium"] == "f" * 40
 
     _git(repository, "reset", "--hard", "HEAD^")
     (workflows / "conan-package.yml").write_text(
@@ -659,6 +695,25 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     ).stdout.strip()
     with pytest.raises(ValueError, match="validation_conan_cache_key"):
         workflow_provenance.validate_callers(repository, unbounded_sha, workflow_sha)
+
+    _git(repository, "reset", "--hard", "HEAD^")
+    (workflows / "conan-package.yml").write_text(
+        package.replace(f"      validation_uranium_ref: {'f' * 40}\n", ""),
+        encoding="utf-8",
+    )
+    (workflows / "windows-arm.yml").write_text(installer, encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "Uranium override not pinned")
+    uranium_unpinned_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="validation_uranium_ref"):
+        workflow_provenance.validate_callers(
+            repository, uranium_unpinned_sha, workflow_sha
+        )
 
 
 def test_package_chain_binds_reference_run_and_c_v_w(tmp_path):
