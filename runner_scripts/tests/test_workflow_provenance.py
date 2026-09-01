@@ -97,6 +97,43 @@ def test_broadcast_data_runs_from_checked_out_recipe_root_with_pinned_helper():
     ) in step["run"]
 
 
+def test_credential_free_validation_skips_only_write_recipe_uploads():
+    package = yaml.safe_load(read("conan-package.yml"))
+    export = yaml.safe_load(read("conan-recipe-export.yml"))
+    package_inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    export_inputs = export.get("on", export[True])["workflow_call"]["inputs"]
+    for inputs in (package_inputs, export_inputs):
+        assert inputs["validation_skip_recipe_upload"]["default"] is False
+
+    package_jobs = package["jobs"]
+    for name in ("conan-recipe-export-specific", "conan-recipe-export-latest"):
+        assert package_jobs[name]["with"]["validation_skip_recipe_upload"] == (
+            "${{ inputs.validation_skip_recipe_upload }}"
+        )
+
+    export_steps = export["jobs"]["package-export"]["steps"]
+    upload = next(step for step in export_steps if step["name"] == "Upload the Recipe")
+    skipped = next(
+        step
+        for step in export_steps
+        if step["name"] == "Record validation-only upload skip"
+    )
+    assert upload["if"] == "${{ inputs.validation_skip_recipe_upload == false }}"
+    assert upload["uses"].endswith("/upload-conan-package")
+    assert skipped["if"] == "${{ inputs.validation_skip_recipe_upload }}"
+
+    create = package_jobs["conan-package-create"]
+    assert "conan-recipe-export-specific" in create["needs"]
+    assert "conan-recipe-export-latest" in create["needs"]
+    assert create["runs-on"] == "${{ matrix.runner }}"
+    create_command = next(
+        step["run"]
+        for step in create["steps"]
+        if step["name"] == "Create the Package (binaries)"
+    )
+    assert 'conan create "_package_sources/${{ inputs.conan_recipe_root }}"' in create_command
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
