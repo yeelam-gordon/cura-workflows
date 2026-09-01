@@ -47,6 +47,11 @@ on:
         required: false
         default: false
         type: boolean
+      validation_skip_recipe_upload:
+        description: Skip write-only recipe uploads for credential-free validation
+        required: false
+        default: false
+        type: boolean
     outputs:
       package_version_full:
         value: ${{ jobs.conan-recipe-version.outputs.package_version_full }}
@@ -78,6 +83,7 @@ jobs:
       conan_recipe_root: ${{ inputs.conan_recipe_root }}
       cura_workflows_ref: ${{ inputs.cura_workflows_ref }}
       provenance_instance: conan-recipe-export-specific
+      validation_skip_recipe_upload: ${{ inputs.validation_skip_recipe_upload }}
     secrets: inherit
 
   conan-recipe-export-latest:
@@ -92,6 +98,7 @@ jobs:
       conan_recipe_root: ${{ inputs.conan_recipe_root }}
       cura_workflows_ref: ${{ inputs.cura_workflows_ref }}
       provenance_instance: conan-recipe-export-latest
+      validation_skip_recipe_upload: ${{ inputs.validation_skip_recipe_upload }}
     secrets: inherit
 
   make-runners-list:
