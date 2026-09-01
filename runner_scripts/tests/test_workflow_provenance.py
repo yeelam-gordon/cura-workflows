@@ -168,6 +168,43 @@ def test_validation_mpdecimal_override_is_pinned_and_fail_closed():
     )
 
 
+def test_validation_conan_config_override_is_pinned_and_preflights_libffi():
+    package = yaml.safe_load(read("conan-package.yml"))
+    inputs = package.get("on", package[True])["workflow_call"]["inputs"]
+    assert inputs["validation_conan_config_ref"]["default"] == ""
+
+    steps = package["jobs"]["conan-package-create"]["steps"]
+    checkout = next(
+        step for step in steps if step["name"] == "Checkout validation Conan configuration"
+    )
+    install = next(
+        step for step in steps if step["name"] == "Install validation Conan configuration"
+    )
+    preflight = next(
+        step for step in steps if step["name"] == "Preflight Windows ARM64 libffi"
+    )
+    condition = (
+        "${{ matrix.runner == 'windows-11-arm' && "
+        "inputs.validation_conan_config_ref != '' }}"
+    )
+    assert checkout["if"] == install["if"] == preflight["if"] == condition
+    assert checkout["with"]["repository"] == "yeelam-gordon/conan-config"
+    assert checkout["with"]["ref"] == "${{ inputs.validation_conan_config_ref }}"
+    assert "restricted to credential-free validation mode" in install["run"]
+    assert "must be an exact 40-hex SHA" in install["run"]
+    assert "rev-parse HEAD" in install["run"]
+    assert "conan config install _validation_conan_config" in install["run"]
+    assert preflight["env"]["CURA_WINDOWS_ARM64_X64_BUILD_CONTEXT"] == "1"
+    assert "conan install --requires=libffi/3.4.4" in preflight["run"]
+    assert "--build='libffi/*' --build=missing" in preflight["run"]
+    create_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step["name"] == "Create the Package (binaries)"
+    )
+    assert steps.index(install) < steps.index(preflight) < create_index
+
+
 def test_runner_list_checkout_is_pinned_and_asserted():
     text = read("make-runners-list.yml")
     assert "cura_workflows_ref:" in text
@@ -436,6 +473,7 @@ def _git(repository, *arguments):
 
 def _validation_callers(workflow_sha):
     mpdecimal_recipe_sha = "d" * 40
+    conan_config_sha = "e" * 40
     package = f"""jobs:
   package:
     uses: yeelam-gordon/cura-workflows/.github/workflows/conan-package.yml@{workflow_sha}
@@ -444,6 +482,7 @@ def _validation_callers(workflow_sha):
       allow_non_default_branch_package_create: true
       validation_skip_recipe_upload: true
       validation_mpdecimal_recipe_ref: {mpdecimal_recipe_sha}
+      validation_conan_config_ref: {conan_config_sha}
       platform_windows_arm64: true
       platform_linux: false
       platform_windows: false
@@ -492,6 +531,7 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     assert chain["V"] == validation_sha
     assert chain["W"] == workflow_sha
     assert chain["mpdecimal_recipe"] == "d" * 40
+    assert chain["conan_config"] == "e" * 40
 
     _git(repository, "reset", "--hard", "HEAD^")
     (workflows / "conan-package.yml").write_text(
@@ -526,6 +566,23 @@ def test_validation_callers_enforce_single_c_v_w_chain(tmp_path):
     ).stdout.strip()
     with pytest.raises(ValueError, match="validation_skip_recipe_upload=true"):
         workflow_provenance.validate_callers(repository, unopted_sha, workflow_sha)
+
+    _git(repository, "reset", "--hard", "HEAD^")
+    (workflows / "conan-package.yml").write_text(
+        package.replace(f"      validation_conan_config_ref: {'e' * 40}\n", ""),
+        encoding="utf-8",
+    )
+    (workflows / "windows-arm.yml").write_text(installer, encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "Conan config not pinned")
+    unpinned_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="validation_conan_config_ref"):
+        workflow_provenance.validate_callers(repository, unpinned_sha, workflow_sha)
 
 
 def test_package_chain_binds_reference_run_and_c_v_w(tmp_path):

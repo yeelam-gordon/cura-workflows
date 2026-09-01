@@ -121,6 +121,14 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
     mpdecimal_recipe = _require_sha(
         dependency_match.group(1), "mpdecimal recipe SHA"
     )
+    config_match = re.search(
+        r"validation_conan_config_ref:\s*([0-9a-fA-F]{40})\s*$",
+        package,
+        re.MULTILINE,
+    )
+    if config_match is None:
+        raise ValueError("missing required exact validation_conan_config_ref")
+    conan_config = _require_sha(config_match.group(1), "Conan config SHA")
 
     _require_line(
         installer,
@@ -137,6 +145,7 @@ def validate_callers(repository: Path, validation_sha: str, workflow_sha: str) -
         "V": validation,
         "W": workflow,
         "mpdecimal_recipe": mpdecimal_recipe,
+        "conan_config": conan_config,
     }
 
 
