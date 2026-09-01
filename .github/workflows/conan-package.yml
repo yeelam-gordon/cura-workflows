@@ -409,6 +409,7 @@ jobs:
           import hashlib
           import sys
           import zipfile
+          from email.parser import BytesParser
           from pathlib import Path
 
           import yaml
@@ -420,9 +421,9 @@ jobs:
                   name for name in archive.namelist()
                   if name.endswith(".dist-info/METADATA")
               )
-              metadata = archive.read(metadata_name).decode("utf-8")
-          assert "Name: twisted-iocpsupport\n" in metadata
-          assert "Version: 1.0.4\n" in metadata
+              metadata = BytesParser().parsebytes(archive.read(metadata_name))
+          assert metadata["Name"] == "twisted-iocpsupport"
+          assert metadata["Version"] == "1.0.4"
           data = yaml.safe_load(recipe.read_text(encoding="utf-8"))
           requirement = data["pip_requirements_core"]["Windows"]["twisted-iocpsupport"]
           requirement.clear()

@@ -318,7 +318,8 @@ def test_validation_iocpsupport_override_builds_and_tests_exact_arm64_wheel():
     assert build["env"]["CIBW_ARCHS_WINDOWS"] == "ARM64"
     assert "cibuildwheel==3.2.1" in build["run"]
     assert "twisted_iocpsupport-1.0.4-cp312-cp312-win_arm64.whl" in build["run"]
-    assert 'assert "Version: 1.0.4\\n" in metadata' in build["run"]
+    assert 'assert metadata["Name"] == "twisted-iocpsupport"' in build["run"]
+    assert 'assert metadata["Version"] == "1.0.4"' in build["run"]
     assert 'requirement["url"] = wheel.as_uri()' in build["run"]
     assert steps.index(build) < next(
         index
