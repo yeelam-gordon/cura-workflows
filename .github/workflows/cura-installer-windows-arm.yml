@@ -369,6 +369,14 @@ jobs:
           build_contract_sha256=${{ steps.contract-sha.outputs.sha256 }}
           "@ | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
 
+      - name: Smoke-build unsigned Arm64 MSI
+        shell: pwsh
+        working-directory: dist
+        run: |
+          $pydir = type ../pydir.txt
+          $env:PATH += ";$pydir;$pydir/Scripts"
+          python ..\cura_inst\packaging\msi\create_windows_msi.py --source_path ..\cura_inst --dist_path .\UltiMaker-Cura --filename "${{ steps.prepare-distribution.outputs.INSTALLER_FILENAME }}.msi" --name "${{ steps.prepare-distribution.outputs.CURA_APP_NAME }}" --version "${{ steps.prepare-distribution.outputs.CURA_VERSION_FULL }}" --arch arm64
+
       - name: Clean local Conan cache
         if: ${{ always() && startsWith(inputs.operating_system, 'self-hosted') }}
         shell: pwsh
